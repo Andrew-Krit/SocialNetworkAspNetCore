@@ -4,6 +4,9 @@ using SocialNetworkAspNetCore.Data;
 using SocialNetworkAspNetCore.ViewModel.Home;
 using SocialNetworkAspNetCore.Data.Models;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using SocialNetworkAspNetCore.Data.Services;
+using SocialNetworkAspNetCore.Data.Helpers;
 
 namespace SocialNetworkAspNetCore.Controllers
 {
@@ -11,61 +14,84 @@ namespace SocialNetworkAspNetCore.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         private readonly AppDbContext _context;
-
-        public HomeController(ILogger<HomeController> logger, AppDbContext appDbContext)
+        private readonly IPostsService _postsService;
+        private readonly IFilesService _filesService;
+        public HomeController(ILogger<HomeController> logger, AppDbContext appDbContext, IPostsService postsService, IFilesService filesService)
         {
             _logger = logger;
             _context = appDbContext;
+            _postsService = postsService;
+            _filesService = filesService;
         }
 
         public async Task<IActionResult> Index()
         {
-            var allPosts = await _context.Posts
-                .Include(n => n.User)
-                .ToListAsync();
+            var allPosts = await _postsService.GetAllPostsAsync();
 
             return View(allPosts);
         }
-
 
         [HttpPost]
         public async Task<IActionResult> CreatePost(PostVM post)
         {
             var loggedInUser = 1;
+            var imageUploadPath = await _filesService.UploadImageAsync(post.Image, ImageFileType.PostImage);
 
             var newPost = new Post
             {
                 Content = post.Content,
                 DateCreated = DateTime.UtcNow,
                 DateUpdated = DateTime.UtcNow,
-                ImageUrl = "",
+                ImageUrl = imageUploadPath,
                 NrOfReports = 0,
                 UserId = loggedInUser
             };
 
-            if(post.Image != null && post.Image.Length > 0)
+            await _postsService.CreatePostAsync(newPost);
+
+            return RedirectToAction("Index");
+        }
+
+        public async Task<IActionResult> TogglePoskLike(PostLikeVM postLikeVM)
+        {
+            var loggedInUserId = 1;
+
+            await _postsService.TogglePostLikeAsync(postLikeVM.PostId, loggedInUserId);
+
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddPostComment(PostCommentVM postCommentVM)
+        {
+            var loggedInUserId = 1;
+
+            var newComment = new Comment()
             {
-                var rootFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                UserId = loggedInUserId,
+                PostId = postCommentVM.PostId,
+                Content = postCommentVM.Content,
+                DateCreated = DateTime.UtcNow,
+                DateUpdated = DateTime.UtcNow
+            };
 
-                if(post.Image.ContentType.Contains("image"))
-                {
-                    var rootFolderPathImages = Path.Combine(rootFolderPath, "images");
-                    Directory.CreateDirectory(rootFolderPathImages);
+            await _postsService.AddPostCommentAsync(newComment);
 
-                    var fileName = Guid.NewGuid().ToString() + Path.GetExtension(post.Image.FileName);
-                    var filePath = Path.Combine(rootFolderPath, fileName);
+            return RedirectToAction("Index");
+        }
 
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                        await post.Image.CopyToAsync(stream);
+        [HttpPost]
+        public async Task<IActionResult> RemovePostComment(RemoveCommentVM removeCommentVM)
+        {
+            await _postsService.RemovePostCommentAsync(removeCommentVM.CommentId);
 
+            return RedirectToAction("Index");
+        }
 
-                    newPost.ImageUrl = "/images/" + fileName;
-;                }
-            }
-
-            await _context.Posts.AddAsync(newPost);
-            await _context.SaveChangesAsync();
-
+        [HttpPost]
+        public async Task<IActionResult> PostDelete(PostRemoveVM postRemoveVM)
+        {
+            await _postsService.RemovePostAsync(postRemoveVM.PostId);
 
             return RedirectToAction("Index");
         }

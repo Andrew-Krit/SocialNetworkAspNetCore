@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SocialNetworkAspNetCore.Data;
 using SocialNetworkAspNetCore.Data.Helpers;
+using SocialNetworkAspNetCore.Data.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,11 @@ builder.Services.AddControllersWithViews();
 
 var dbConnectionString = builder.Configuration.GetConnectionString("Default");
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(dbConnectionString));
+
+//Services configuration
+builder.Services.AddScoped<IPostsService, PostsService>();
+builder.Services.AddScoped<IFilesService, FilesService>();
+builder.Services.AddScoped<IUsersService, UsersService>();
 
 var app = builder.Build();
 
